@@ -53,6 +53,8 @@ public class BossManager implements Listener {
     private final File bossesFile;
 
     private final Map<String, CustomBoss> bosses = new LinkedHashMap<>();
+    private final Map<String, BaseBoss> registeredBosses =
+            new LinkedHashMap<>();
     private final Map<UUID, ActiveBoss> activeBosses = new HashMap<>();
 
     private BukkitTask displayTask;
@@ -113,13 +115,60 @@ public class BossManager implements Listener {
         return boss;
     }
 
+    public CustomBoss registerBoss(BaseBoss baseBoss) {
+        Objects.requireNonNull(baseBoss, "BaseBoss cannot be null");
+
+        String normalizedId = normalizeId(baseBoss.getRegistryId());
+
+        CustomBoss boss = new CustomBoss(
+                bossKey,
+                normalizedId,
+                baseBoss.getColoredDisplayName(),
+                baseBoss.getHealth(),
+                baseBoss.getEntityType(),
+                baseBoss.isBossBar(),
+                baseBoss.isActionBar(),
+                new ArrayList<>(baseBoss.getLootTable()),
+                new ArrayList<>(baseBoss.getPotionEffects())
+        );
+
+        boss.copySettingsFrom(baseBoss);
+        bosses.put(normalizedId, boss);
+        registeredBosses.put(normalizedId, baseBoss);
+        saveBosses();
+
+        return boss;
+    }
+
+    public LivingEntity spawnBoss(BaseBoss baseBoss, Location location) {
+        Objects.requireNonNull(baseBoss, "BaseBoss cannot be null");
+
+        return spawnBoss(baseBoss.getRegistryId(), location);
+    }
+
+    public boolean unregisterBoss(BaseBoss baseBoss) {
+        Objects.requireNonNull(baseBoss, "BaseBoss cannot be null");
+
+        return unregisterBoss(baseBoss.getRegistryId());
+    }
+
+    public boolean unregisterBoss(String id) {
+        String normalizedId = normalizeId(id);
+        boolean removedApiBoss = registeredBosses.remove(normalizedId) != null;
+        boolean removedCustomBoss = deleteBoss(normalizedId);
+
+        return removedApiBoss || removedCustomBoss;
+    }
+
     public boolean deleteBoss(String id) {
-        CustomBoss removed = bosses.remove(normalizeId(id));
+        String normalizedId = normalizeId(id);
+        CustomBoss removed = bosses.remove(normalizedId);
 
         if (removed == null) {
             return false;
         }
 
+        registeredBosses.remove(normalizedId);
         removeActiveBosses(removed.getId());
         saveBosses();
         return true;
@@ -147,6 +196,19 @@ public class BossManager implements Listener {
         LivingEntity entity = boss.spawnBoss(location);
 
         if (entity != null) {
+            BaseBoss registeredBoss = registeredBosses.get(boss.getId());
+
+            if (registeredBoss != null) {
+                runBossHook(
+                        registeredBoss,
+                        () -> registeredBoss.applyToEntity(entity)
+                );
+                runBossHook(
+                        registeredBoss,
+                        () -> registeredBoss.onSpawn(entity)
+                );
+            }
+
             trackActiveBoss(entity, boss);
         }
 
@@ -173,6 +235,45 @@ public class BossManager implements Listener {
             bossesSection.set(
                     path + ".potion-effects",
                     boss.getPotionEffects()
+            );
+            bossesSection.set(
+                    path + ".custom-name-visible",
+                    boss.isCustomNameVisible()
+            );
+            bossesSection.set(path + ".persistent", boss.isPersistent());
+            bossesSection.set(
+                    path + ".remove-when-far-away",
+                    boss.isRemoveWhenFarAway()
+            );
+            bossesSection.set(path + ".glowing", boss.isGlowing());
+            bossesSection.set(path + ".invulnerable", boss.isInvulnerable());
+            bossesSection.set(path + ".silent", boss.isSilent());
+            bossesSection.set(path + ".ai", boss.hasAi());
+            bossesSection.set(
+                    path + ".can-pickup-items",
+                    boss.canPickupItems()
+            );
+            bossesSection.set(path + ".equipment.helmet", boss.getHelmet());
+            bossesSection.set(
+                    path + ".equipment.chestplate",
+                    boss.getChestplate()
+            );
+            bossesSection.set(
+                    path + ".equipment.leggings",
+                    boss.getLeggings()
+            );
+            bossesSection.set(path + ".equipment.boots", boss.getBoots());
+            bossesSection.set(
+                    path + ".equipment.main-hand",
+                    boss.getMainHand()
+            );
+            bossesSection.set(
+                    path + ".equipment.off-hand",
+                    boss.getOffHand()
+            );
+            bossesSection.set(
+                    path + ".dropped-experience",
+                    boss.getDroppedExperience()
             );
         }
 
@@ -260,6 +361,78 @@ public class BossManager implements Listener {
                         actionBar,
                         lootTable,
                         potionEffects
+                );
+
+                boss.setCustomNameVisible(
+                        bossesSection.getBoolean(
+                                path + "custom-name-visible",
+                                true
+                        )
+                );
+                boss.setPersistent(
+                        bossesSection.getBoolean(
+                                path + "persistent",
+                                true
+                        )
+                );
+                boss.setRemoveWhenFarAway(
+                        bossesSection.getBoolean(
+                                path + "remove-when-far-away",
+                                false
+                        )
+                );
+                boss.setGlowing(
+                        bossesSection.getBoolean(path + "glowing", false)
+                );
+                boss.setInvulnerable(
+                        bossesSection.getBoolean(
+                                path + "invulnerable",
+                                false
+                        )
+                );
+                boss.setSilent(
+                        bossesSection.getBoolean(path + "silent", false)
+                );
+                boss.setAi(
+                        bossesSection.getBoolean(path + "ai", true)
+                );
+                boss.setCanPickupItems(
+                        bossesSection.getBoolean(
+                                path + "can-pickup-items",
+                                false
+                        )
+                );
+                boss.setHelmet(
+                        bossesSection.getItemStack(path + "equipment.helmet")
+                );
+                boss.setChestplate(
+                        bossesSection.getItemStack(
+                                path + "equipment.chestplate"
+                        )
+                );
+                boss.setLeggings(
+                        bossesSection.getItemStack(
+                                path + "equipment.leggings"
+                        )
+                );
+                boss.setBoots(
+                        bossesSection.getItemStack(path + "equipment.boots")
+                );
+                boss.setMainHand(
+                        bossesSection.getItemStack(
+                                path + "equipment.main-hand"
+                        )
+                );
+                boss.setOffHand(
+                        bossesSection.getItemStack(
+                                path + "equipment.off-hand"
+                        )
+                );
+                boss.setDroppedExperience(
+                        bossesSection.getInt(
+                                path + "dropped-experience",
+                                -1
+                        )
                 );
 
                 bosses.put(boss.getId(), boss);
@@ -391,6 +564,15 @@ public class BossManager implements Listener {
         CustomBoss boss = bosses.get(normalizeId(bossId));
 
         if (boss != null) {
+            BaseBoss registeredBoss = registeredBosses.get(boss.getId());
+
+            if (registeredBoss != null) {
+                runBossHook(
+                        registeredBoss,
+                        () -> registeredBoss.applyToEntity(entity)
+                );
+            }
+
             trackActiveBoss(entity, boss);
         }
     }
@@ -476,6 +658,15 @@ public class BossManager implements Listener {
 
             if (boss.isActionBar()) {
                 sendActionBar(entity, boss);
+            }
+
+            BaseBoss registeredBoss = registeredBosses.get(boss.getId());
+
+            if (registeredBoss != null) {
+                runBossHook(
+                        registeredBoss,
+                        () -> registeredBoss.onTick(entity)
+                );
             }
         }
     }
@@ -622,7 +813,32 @@ public class BossManager implements Listener {
             event.getDrops().add(item.clone());
         }
 
+        if (boss.hasDroppedExperienceOverride()) {
+            event.setDroppedExp(boss.getDroppedExperience());
+        }
+
+        BaseBoss registeredBoss = registeredBosses.get(boss.getId());
+
+        if (registeredBoss != null) {
+            runBossHook(
+                    registeredBoss,
+                    () -> registeredBoss.onDeath(event)
+            );
+        }
+
         removeActiveBoss(entity.getUniqueId());
+    }
+
+    private void runBossHook(BaseBoss boss, Runnable hook) {
+        try {
+            hook.run();
+        } catch (RuntimeException exception) {
+            plugin.getLogger().log(
+                    Level.WARNING,
+                    "Custom boss hook failed for " + boss.getRegistryId(),
+                    exception
+            );
+        }
     }
 
     private static final class ActiveBoss {

@@ -159,6 +159,12 @@ public class BossCommand implements CommandExecutor, TabCompleter {
                     editPotionEffects(sender, label, boss, args);
             case "loot", "loottable" ->
                     editLoot(sender, label, boss, args);
+            case "behavior", "behaviour", "flags" ->
+                    editBehavior(sender, label, boss, args);
+            case "equipment", "gear" ->
+                    editEquipment(sender, label, boss, args);
+            case "xp", "experience", "droppedxp" ->
+                    editDroppedExperience(sender, boss, args);
             default -> sendEditHelp(sender, label);
         }
     }
@@ -829,6 +835,356 @@ public class BossCommand implements CommandExecutor, TabCompleter {
         }
     }
 
+    private void editBehavior(
+            CommandSender sender,
+            String label,
+            CustomBoss boss,
+            String[] args
+    ) {
+        if (args.length < 4) {
+            sendBehaviorHelp(sender, label);
+            return;
+        }
+
+        String action = args[3].toLowerCase(Locale.ROOT);
+
+        if (action.equals("list")) {
+            listBehavior(sender, boss);
+            return;
+        }
+
+        if (args.length != 5) {
+            sendBehaviorHelp(sender, label);
+            return;
+        }
+
+        BossBehavior behavior = parseBossBehavior(args[3]);
+        boolean enabled = parseBoolean(args[4]);
+
+        setBehavior(sender, boss, behavior, enabled);
+    }
+
+    private void setBehavior(
+            CommandSender sender,
+            CustomBoss boss,
+            BossBehavior behavior,
+            boolean enabled
+    ) {
+        switch (behavior) {
+            case CUSTOM_NAME_VISIBLE -> boss.setCustomNameVisible(enabled);
+            case PERSISTENT -> boss.setPersistent(enabled);
+            case REMOVE_WHEN_FAR_AWAY ->
+                    boss.setRemoveWhenFarAway(enabled);
+            case GLOWING -> boss.setGlowing(enabled);
+            case INVULNERABLE -> boss.setInvulnerable(enabled);
+            case SILENT -> boss.setSilent(enabled);
+            case AI -> boss.setAi(enabled);
+            case CAN_PICKUP_ITEMS -> boss.setCanPickupItems(enabled);
+        }
+
+        bossManager.saveBosses();
+
+        sendSuccess(
+                sender,
+                formatBehaviorName(behavior)
+                        + " for "
+                        + ChatColor.YELLOW
+                        + boss.getId()
+                        + ChatColor.GREEN
+                        + " has been set to "
+                        + ChatColor.YELLOW
+                        + enabled
+                        + ChatColor.GREEN
+                        + "."
+        );
+    }
+
+    private void listBehavior(
+            CommandSender sender,
+            CustomBoss boss
+    ) {
+        sender.sendMessage(
+                ChatColor.DARK_RED
+                        + "Behavior for "
+                        + boss.getId()
+                        + ":"
+        );
+
+        sender.sendMessage(
+                ChatColor.GRAY
+                        + "Custom name visible: "
+                        + ChatColor.WHITE
+                        + boss.isCustomNameVisible()
+        );
+        sender.sendMessage(
+                ChatColor.GRAY
+                        + "Persistent: "
+                        + ChatColor.WHITE
+                        + boss.isPersistent()
+        );
+        sender.sendMessage(
+                ChatColor.GRAY
+                        + "Remove when far away: "
+                        + ChatColor.WHITE
+                        + boss.isRemoveWhenFarAway()
+        );
+        sender.sendMessage(
+                ChatColor.GRAY
+                        + "Glowing: "
+                        + ChatColor.WHITE
+                        + boss.isGlowing()
+        );
+        sender.sendMessage(
+                ChatColor.GRAY
+                        + "Invulnerable: "
+                        + ChatColor.WHITE
+                        + boss.isInvulnerable()
+        );
+        sender.sendMessage(
+                ChatColor.GRAY
+                        + "Silent: "
+                        + ChatColor.WHITE
+                        + boss.isSilent()
+        );
+        sender.sendMessage(
+                ChatColor.GRAY
+                        + "AI: "
+                        + ChatColor.WHITE
+                        + boss.hasAi()
+        );
+        sender.sendMessage(
+                ChatColor.GRAY
+                        + "Can pickup items: "
+                        + ChatColor.WHITE
+                        + boss.canPickupItems()
+        );
+    }
+
+    private void editEquipment(
+            CommandSender sender,
+            String label,
+            CustomBoss boss,
+            String[] args
+    ) {
+        if (args.length < 4) {
+            sendEquipmentHelp(sender, label);
+            return;
+        }
+
+        String action = args[3].toLowerCase(Locale.ROOT);
+
+        switch (action) {
+            case "set" -> setEquipment(sender, boss, args);
+            case "sethand" -> setEquipmentFromHand(sender, boss, args);
+            case "clear" -> clearEquipment(sender, boss, args);
+            case "list" -> listEquipment(sender, boss);
+            default -> sendEquipmentHelp(sender, label);
+        }
+    }
+
+    private void setEquipment(
+            CommandSender sender,
+            CustomBoss boss,
+            String[] args
+    ) {
+        if (args.length < 6 || args.length > 7) {
+            sendError(
+                    sender,
+                    "Usage: /boss edit <id> equipment set "
+                            + "<slot> <material> [amount]"
+            );
+            return;
+        }
+
+        EquipmentSlot slot = parseEquipmentSlot(args[4]);
+        ItemStack itemStack = createItemStack(args[5], args, 6);
+
+        setEquipmentItem(boss, slot, itemStack);
+        bossManager.saveBosses();
+
+        sendSuccess(
+                sender,
+                "Set "
+                        + ChatColor.YELLOW
+                        + formatEquipmentSlot(slot)
+                        + ChatColor.GREEN
+                        + " equipment for "
+                        + ChatColor.YELLOW
+                        + boss.getId()
+                        + ChatColor.GREEN
+                        + " to "
+                        + ChatColor.YELLOW
+                        + itemStack.getAmount()
+                        + "x "
+                        + formatEnumName(itemStack.getType().name())
+                        + ChatColor.GREEN
+                        + "."
+        );
+    }
+
+    private void setEquipmentFromHand(
+            CommandSender sender,
+            CustomBoss boss,
+            String[] args
+    ) {
+        if (args.length != 5) {
+            sendError(
+                    sender,
+                    "Usage: /boss edit <id> equipment sethand <slot>"
+            );
+            return;
+        }
+
+        if (!(sender instanceof Player player)) {
+            sendError(sender, "Only players can use equipment sethand.");
+            return;
+        }
+
+        ItemStack heldItem =
+                player.getInventory().getItemInMainHand();
+
+        if (heldItem.getType().isAir()) {
+            sendError(sender, "You must hold an item in your main hand.");
+            return;
+        }
+
+        EquipmentSlot slot = parseEquipmentSlot(args[4]);
+
+        setEquipmentItem(boss, slot, heldItem);
+        bossManager.saveBosses();
+
+        sendSuccess(
+                sender,
+                "Set "
+                        + ChatColor.YELLOW
+                        + formatEquipmentSlot(slot)
+                        + ChatColor.GREEN
+                        + " equipment for "
+                        + ChatColor.YELLOW
+                        + boss.getId()
+                        + ChatColor.GREEN
+                        + " from your main hand."
+        );
+    }
+
+    private void clearEquipment(
+            CommandSender sender,
+            CustomBoss boss,
+            String[] args
+    ) {
+        if (args.length != 5) {
+            sendError(
+                    sender,
+                    "Usage: /boss edit <id> equipment clear <slot|all>"
+            );
+            return;
+        }
+
+        if (args[4].equalsIgnoreCase("all")) {
+            boss.setEquipment(null, null, null, null, null, null);
+            bossManager.saveBosses();
+            sendSuccess(
+                    sender,
+                    "Cleared all equipment for "
+                            + ChatColor.YELLOW
+                            + boss.getId()
+                            + ChatColor.GREEN
+                            + "."
+            );
+            return;
+        }
+
+        EquipmentSlot slot = parseEquipmentSlot(args[4]);
+
+        setEquipmentItem(boss, slot, null);
+        bossManager.saveBosses();
+
+        sendSuccess(
+                sender,
+                "Cleared "
+                        + ChatColor.YELLOW
+                        + formatEquipmentSlot(slot)
+                        + ChatColor.GREEN
+                        + " equipment for "
+                        + ChatColor.YELLOW
+                        + boss.getId()
+                        + ChatColor.GREEN
+                        + "."
+        );
+    }
+
+    private void listEquipment(
+            CommandSender sender,
+            CustomBoss boss
+    ) {
+        sender.sendMessage(
+                ChatColor.DARK_RED
+                        + "Equipment for "
+                        + boss.getId()
+                        + ":"
+        );
+
+        for (EquipmentSlot slot : EquipmentSlot.values()) {
+            ItemStack itemStack = getEquipmentItem(boss, slot);
+
+            String itemText = itemStack == null
+                    ? "empty"
+                    : itemStack.getAmount()
+                    + "x "
+                    + formatEnumName(itemStack.getType().name());
+
+            sender.sendMessage(
+                    ChatColor.DARK_GRAY
+                            + "- "
+                            + ChatColor.YELLOW
+                            + formatEquipmentSlot(slot)
+                            + ChatColor.GRAY
+                            + ": "
+                            + ChatColor.WHITE
+                            + itemText
+            );
+        }
+    }
+
+    private void editDroppedExperience(
+            CommandSender sender,
+            CustomBoss boss,
+            String[] args
+    ) {
+        if (args.length != 4) {
+            sendError(
+                    sender,
+                    "Usage: /boss edit <id> xp <amount|-1>"
+            );
+            return;
+        }
+
+        int droppedExperience = parseInteger(
+                args[3],
+                "dropped experience"
+        );
+
+        boss.setDroppedExperience(droppedExperience);
+        bossManager.saveBosses();
+
+        String valueText = droppedExperience < 0
+                ? "default"
+                : String.valueOf(droppedExperience);
+
+        sendSuccess(
+                sender,
+                "Set dropped experience for "
+                        + ChatColor.YELLOW
+                        + boss.getId()
+                        + ChatColor.GREEN
+                        + " to "
+                        + ChatColor.YELLOW
+                        + valueText
+                        + ChatColor.GREEN
+                        + "."
+        );
+    }
+
     private void handleSpawn(
             CommandSender sender,
             String[] args
@@ -1100,6 +1456,31 @@ public class BossCommand implements CommandExecutor, TabCompleter {
                         + ChatColor.WHITE
                         + boss.isActionBar()
         );
+
+        sender.sendMessage(
+                ChatColor.GRAY
+                        + "Dropped XP: "
+                        + ChatColor.WHITE
+                        + (
+                        boss.hasDroppedExperienceOverride()
+                                ? boss.getDroppedExperience()
+                                : "default"
+                )
+        );
+
+        sender.sendMessage(
+                ChatColor.GRAY
+                        + "Behavior: "
+                        + ChatColor.WHITE
+                        + "glowing="
+                        + boss.isGlowing()
+                        + ", invulnerable="
+                        + boss.isInvulnerable()
+                        + ", silent="
+                        + boss.isSilent()
+                        + ", ai="
+                        + boss.hasAi()
+        );
     }
 
     private void handleSave(CommandSender sender) {
@@ -1254,6 +1635,136 @@ public class BossCommand implements CommandExecutor, TabCompleter {
             case BOSS_BAR -> "Boss bar";
             case ACTION_BAR -> "Action bar";
         };
+    }
+
+    private BossBehavior parseBossBehavior(String input) {
+        String normalized = input
+                .toLowerCase(Locale.ROOT)
+                .replace("-", "")
+                .replace("_", "");
+
+        return switch (normalized) {
+            case "customnamevisible", "namevisible" ->
+                    BossBehavior.CUSTOM_NAME_VISIBLE;
+            case "persistent" -> BossBehavior.PERSISTENT;
+            case "removewhenfaraway", "despawn" ->
+                    BossBehavior.REMOVE_WHEN_FAR_AWAY;
+            case "glowing", "glow" -> BossBehavior.GLOWING;
+            case "invulnerable", "god" -> BossBehavior.INVULNERABLE;
+            case "silent" -> BossBehavior.SILENT;
+            case "ai" -> BossBehavior.AI;
+            case "canpickupitems", "pickupitems", "pickup" ->
+                    BossBehavior.CAN_PICKUP_ITEMS;
+            default -> throw new IllegalArgumentException(
+                    "Unknown behavior: " + input
+            );
+        };
+    }
+
+    private String formatBehaviorName(BossBehavior behavior) {
+        return switch (behavior) {
+            case CUSTOM_NAME_VISIBLE -> "Custom name visible";
+            case PERSISTENT -> "Persistent";
+            case REMOVE_WHEN_FAR_AWAY -> "Remove when far away";
+            case GLOWING -> "Glowing";
+            case INVULNERABLE -> "Invulnerable";
+            case SILENT -> "Silent";
+            case AI -> "AI";
+            case CAN_PICKUP_ITEMS -> "Can pickup items";
+        };
+    }
+
+    private EquipmentSlot parseEquipmentSlot(String input) {
+        String normalized = input
+                .toLowerCase(Locale.ROOT)
+                .replace("-", "")
+                .replace("_", "");
+
+        return switch (normalized) {
+            case "helmet", "head" -> EquipmentSlot.HELMET;
+            case "chestplate", "chest" -> EquipmentSlot.CHESTPLATE;
+            case "leggings", "legs" -> EquipmentSlot.LEGGINGS;
+            case "boots", "feet" -> EquipmentSlot.BOOTS;
+            case "mainhand", "hand", "weapon" -> EquipmentSlot.MAIN_HAND;
+            case "offhand", "shield" -> EquipmentSlot.OFF_HAND;
+            default -> throw new IllegalArgumentException(
+                    "Unknown equipment slot: " + input
+            );
+        };
+    }
+
+    private String formatEquipmentSlot(EquipmentSlot slot) {
+        return switch (slot) {
+            case HELMET -> "helmet";
+            case CHESTPLATE -> "chestplate";
+            case LEGGINGS -> "leggings";
+            case BOOTS -> "boots";
+            case MAIN_HAND -> "main hand";
+            case OFF_HAND -> "off hand";
+        };
+    }
+
+    private void setEquipmentItem(
+            CustomBoss boss,
+            EquipmentSlot slot,
+            ItemStack itemStack
+    ) {
+        switch (slot) {
+            case HELMET -> boss.setHelmet(itemStack);
+            case CHESTPLATE -> boss.setChestplate(itemStack);
+            case LEGGINGS -> boss.setLeggings(itemStack);
+            case BOOTS -> boss.setBoots(itemStack);
+            case MAIN_HAND -> boss.setMainHand(itemStack);
+            case OFF_HAND -> boss.setOffHand(itemStack);
+        }
+    }
+
+    private ItemStack getEquipmentItem(
+            CustomBoss boss,
+            EquipmentSlot slot
+    ) {
+        return switch (slot) {
+            case HELMET -> boss.getHelmet();
+            case CHESTPLATE -> boss.getChestplate();
+            case LEGGINGS -> boss.getLeggings();
+            case BOOTS -> boss.getBoots();
+            case MAIN_HAND -> boss.getMainHand();
+            case OFF_HAND -> boss.getOffHand();
+        };
+    }
+
+    private ItemStack createItemStack(
+            String materialName,
+            String[] args,
+            int amountIndex
+    ) {
+        Material material = Material.matchMaterial(materialName);
+
+        if (material == null || material.isAir()) {
+            throw new IllegalArgumentException(
+                    "Unknown or invalid material: " + materialName
+            );
+        }
+
+        if (!material.isItem()) {
+            throw new IllegalArgumentException(
+                    material.name() + " cannot exist as an item."
+            );
+        }
+
+        int amount = args.length > amountIndex
+                ? parseInteger(args[amountIndex], "amount")
+                : 1;
+
+        if (amount <= 0 || amount > material.getMaxStackSize()) {
+            throw new IllegalArgumentException(
+                    "Amount must be between 1 and "
+                            + material.getMaxStackSize()
+                            + "."
+            );
+        }
+
+        return new ItemStack(material, amount);
     }
 
     private Location getSenderLocation(CommandSender sender) {
@@ -1532,6 +2043,27 @@ public class BossCommand implements CommandExecutor, TabCompleter {
                         + label
                         + " edit <id> loot ..."
         );
+
+        sender.sendMessage(
+                ChatColor.YELLOW
+                        + "/"
+                        + label
+                        + " edit <id> behavior ..."
+        );
+
+        sender.sendMessage(
+                ChatColor.YELLOW
+                        + "/"
+                        + label
+                        + " edit <id> equipment ..."
+        );
+
+        sender.sendMessage(
+                ChatColor.YELLOW
+                        + "/"
+                        + label
+                        + " edit <id> xp <amount|-1>"
+        );
     }
 
     private void sendPotionHelp(
@@ -1614,6 +2146,80 @@ public class BossCommand implements CommandExecutor, TabCompleter {
                         + "/"
                         + label
                         + " edit <id> loot list"
+        );
+    }
+
+    private void sendBehaviorHelp(
+            CommandSender sender,
+            String label
+    ) {
+        sender.sendMessage(
+                ChatColor.DARK_RED + "Behavior editing commands"
+        );
+
+        sender.sendMessage(
+                ChatColor.YELLOW
+                        + "/"
+                        + label
+                        + " edit <id> behavior <name> <true|false>"
+        );
+
+        sender.sendMessage(
+                ChatColor.YELLOW
+                        + "/"
+                        + label
+                        + " edit <id> behavior list"
+        );
+
+        sender.sendMessage(
+                ChatColor.GRAY
+                        + "Names: customnamevisible, persistent, "
+                        + "removewhenfaraway, glowing, invulnerable, "
+                        + "silent, ai, canpickupitems"
+        );
+    }
+
+    private void sendEquipmentHelp(
+            CommandSender sender,
+            String label
+    ) {
+        sender.sendMessage(
+                ChatColor.DARK_RED + "Equipment editing commands"
+        );
+
+        sender.sendMessage(
+                ChatColor.YELLOW
+                        + "/"
+                        + label
+                        + " edit <id> equipment set "
+                        + "<slot> <material> [amount]"
+        );
+
+        sender.sendMessage(
+                ChatColor.YELLOW
+                        + "/"
+                        + label
+                        + " edit <id> equipment sethand <slot>"
+        );
+
+        sender.sendMessage(
+                ChatColor.YELLOW
+                        + "/"
+                        + label
+                        + " edit <id> equipment clear <slot|all>"
+        );
+
+        sender.sendMessage(
+                ChatColor.YELLOW
+                        + "/"
+                        + label
+                        + " edit <id> equipment list"
+        );
+
+        sender.sendMessage(
+                ChatColor.GRAY
+                        + "Slots: helmet, chestplate, leggings, "
+                        + "boots, mainhand, offhand"
         );
     }
 
@@ -1709,7 +2315,10 @@ public class BossCommand implements CommandExecutor, TabCompleter {
                             "bossbar",
                             "actionbar",
                             "potion",
-                            "loot"
+                            "loot",
+                            "behavior",
+                            "equipment",
+                            "xp"
                     ),
                     args[2]
             );
@@ -1755,6 +2364,32 @@ public class BossCommand implements CommandExecutor, TabCompleter {
                         args[3]
                 );
             }
+
+            if (isBehaviorEdit(args[2])) {
+                return filter(
+                        getBehaviorNames(),
+                        args[3]
+                );
+            }
+
+            if (isEquipmentEdit(args[2])) {
+                return filter(
+                        List.of(
+                                "set",
+                                "sethand",
+                                "clear",
+                                "list"
+                        ),
+                        args[3]
+                );
+            }
+
+            if (isDroppedExperienceEdit(args[2])) {
+                return filter(
+                        List.of("-1", "0", "25", "50", "100"),
+                        args[3]
+                );
+            }
         }
 
         if (args.length == 5
@@ -1775,6 +2410,47 @@ public class BossCommand implements CommandExecutor, TabCompleter {
             return filter(
                     getItemMaterialNames(),
                     args[4]
+            );
+        }
+
+        if (args.length == 5
+                && isBehaviorEdit(args[2])
+                && !args[3].equalsIgnoreCase("list")) {
+            return filter(
+                    List.of("true", "false"),
+                    args[4]
+            );
+        }
+
+        if (args.length == 5
+                && isEquipmentEdit(args[2])
+                && (
+                args[3].equalsIgnoreCase("set")
+                        || args[3].equalsIgnoreCase("sethand")
+                        || args[3].equalsIgnoreCase("clear")
+        )) {
+            List<String> slots = args[3].equalsIgnoreCase("clear")
+                    ? getEquipmentSlotNamesWithAll()
+                    : getEquipmentSlotNames();
+
+            return filter(slots, args[4]);
+        }
+
+        if (args.length == 6
+                && isEquipmentEdit(args[2])
+                && args[3].equalsIgnoreCase("set")) {
+            return filter(
+                    getItemMaterialNames(),
+                    args[5]
+            );
+        }
+
+        if (args.length == 7
+                && isEquipmentEdit(args[2])
+                && args[3].equalsIgnoreCase("set")) {
+            return filter(
+                    List.of("1", "2", "3", "4", "8", "16", "32", "64"),
+                    args[6]
             );
         }
 
@@ -1862,6 +2538,54 @@ public class BossCommand implements CommandExecutor, TabCompleter {
         );
     }
 
+    private boolean isBehaviorEdit(String input) {
+        return input.equalsIgnoreCase("behavior")
+                || input.equalsIgnoreCase("behaviour")
+                || input.equalsIgnoreCase("flags");
+    }
+
+    private boolean isEquipmentEdit(String input) {
+        return input.equalsIgnoreCase("equipment")
+                || input.equalsIgnoreCase("gear");
+    }
+
+    private boolean isDroppedExperienceEdit(String input) {
+        return input.equalsIgnoreCase("xp")
+                || input.equalsIgnoreCase("experience")
+                || input.equalsIgnoreCase("droppedxp");
+    }
+
+    private List<String> getBehaviorNames() {
+        return List.of(
+                "customnamevisible",
+                "persistent",
+                "removewhenfaraway",
+                "glowing",
+                "invulnerable",
+                "silent",
+                "ai",
+                "canpickupitems",
+                "list"
+        );
+    }
+
+    private List<String> getEquipmentSlotNames() {
+        return List.of(
+                "helmet",
+                "chestplate",
+                "leggings",
+                "boots",
+                "mainhand",
+                "offhand"
+        );
+    }
+
+    private List<String> getEquipmentSlotNamesWithAll() {
+        List<String> slots = new ArrayList<>(getEquipmentSlotNames());
+        slots.add("all");
+        return slots;
+    }
+
     private List<String> filter(
             Collection<String> values,
             String input
@@ -1889,5 +2613,25 @@ public class BossCommand implements CommandExecutor, TabCompleter {
     private enum BossFeature {
         BOSS_BAR,
         ACTION_BAR
+    }
+
+    private enum BossBehavior {
+        CUSTOM_NAME_VISIBLE,
+        PERSISTENT,
+        REMOVE_WHEN_FAR_AWAY,
+        GLOWING,
+        INVULNERABLE,
+        SILENT,
+        AI,
+        CAN_PICKUP_ITEMS
+    }
+
+    private enum EquipmentSlot {
+        HELMET,
+        CHESTPLATE,
+        LEGGINGS,
+        BOOTS,
+        MAIN_HAND,
+        OFF_HAND
     }
 }

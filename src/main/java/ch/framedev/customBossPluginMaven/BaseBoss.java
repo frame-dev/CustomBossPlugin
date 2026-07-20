@@ -1,36 +1,32 @@
 package ch.framedev.customBossPluginMaven;
 
-import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
-import org.bukkit.World;
-import org.bukkit.attribute.Attribute;
-import org.bukkit.attribute.AttributeInstance;
-import org.bukkit.entity.Entity;
+import org.bukkit.ChatColor;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
-public class CustomBoss {
+public abstract class BaseBoss {
 
-    private final NamespacedKey bossKey;
-
+    private final JavaPlugin plugin;
     private final String id;
-    private String name;
+    private final NamespacedKey key;
+    private String displayName;
     private double health;
     private EntityType entityType;
-
     private boolean bossBar;
     private boolean actionBar;
-
     private List<ItemStack> lootTable;
     private List<PotionEffect> potionEffects;
     private boolean customNameVisible = true;
@@ -49,168 +45,105 @@ public class CustomBoss {
     private ItemStack offHand;
     private int droppedExperience = -1;
 
-    public CustomBoss(
-            NamespacedKey bossKey,
+    public BaseBoss(
+            JavaPlugin plugin,
+            String displayName,
+            String id
+    ) {
+        this(
+                plugin,
+                displayName,
+                id,
+                20.0,
+                EntityType.ZOMBIE
+        );
+    }
+
+    public BaseBoss(
+            JavaPlugin plugin,
+            String displayName,
             String id,
-            String name,
+            double health,
+            EntityType entityType
+    ) {
+        this(
+                plugin,
+                displayName,
+                id,
+                health,
+                entityType,
+                false,
+                false,
+                List.of(),
+                List.of()
+        );
+    }
+
+    public BaseBoss(
+            JavaPlugin plugin,
+            String displayName,
+            String id,
             double health,
             EntityType entityType,
             boolean bossBar,
             boolean actionBar,
-            List<ItemStack> lootTable,
-            List<PotionEffect> potionEffects
+            Collection<ItemStack> lootTable,
+            Collection<PotionEffect> potionEffects
     ) {
-        this.bossKey = Objects.requireNonNull(bossKey, "Boss key cannot be null");
+        this.plugin = Objects.requireNonNull(plugin, "Plugin cannot be null");
         this.id = validateId(id);
-        this.name = Objects.requireNonNull(name, "Boss name cannot be null");
-        this.entityType = validateEntityType(entityType);
+        this.displayName = Objects.requireNonNull(
+                displayName,
+                "Display name cannot be null"
+        );
+        this.key = new NamespacedKey(plugin, this.id);
 
         setHealth(health);
+        setEntityType(entityType);
+        setBossBar(bossBar);
+        setActionBar(actionBar);
         setLootTable(lootTable);
         setPotionEffects(potionEffects);
-
-        this.bossBar = bossBar;
-        this.actionBar = actionBar;
     }
 
-    public LivingEntity spawnBoss(Location location) {
-        Objects.requireNonNull(location, "Location cannot be null");
-
-        World world = location.getWorld();
-        if (world == null) {
-            return null;
-        }
-
-        Entity entity = world.spawnEntity(location, entityType);
-
-        if (!(entity instanceof LivingEntity livingEntity)) {
-            entity.remove();
-            return null;
-        }
-
-        AttributeInstance maxHealth =
-                livingEntity.getAttribute(Attribute.MAX_HEALTH);
-
-        if (maxHealth == null) {
-            livingEntity.remove();
-
-            throw new IllegalStateException(
-                    entityType + " does not have the MAX_HEALTH attribute"
-            );
-        }
-
-        try {
-            maxHealth.setBaseValue(health);
-            livingEntity.setHealth(health);
-
-            livingEntity.getPersistentDataContainer().set(
-                    bossKey,
-                    PersistentDataType.STRING,
-                    id
-            );
-
-            if (!name.isBlank()) {
-                livingEntity.setCustomName(name);
-                livingEntity.setCustomNameVisible(customNameVisible);
-            }
-
-            if (!potionEffects.isEmpty()) {
-                livingEntity.addPotionEffects(potionEffects);
-            }
-
-            livingEntity.setRemoveWhenFarAway(removeWhenFarAway);
-            livingEntity.setPersistent(persistent);
-            livingEntity.setGlowing(glowing);
-            livingEntity.setInvulnerable(invulnerable);
-            livingEntity.setSilent(silent);
-            livingEntity.setAI(ai);
-            livingEntity.setCanPickupItems(canPickupItems);
-            applyEquipment(livingEntity);
-
-            return livingEntity;
-        } catch (RuntimeException exception) {
-            livingEntity.remove();
-            throw exception;
-        }
+    public JavaPlugin getPlugin() {
+        return plugin;
     }
 
-    public void addLoot(ItemStack itemStack) {
-        Objects.requireNonNull(itemStack, "ItemStack cannot be null");
-
-        if (itemStack.getType().isAir()) {
-            throw new IllegalArgumentException("Cannot add air to the loot table");
-        }
-
-        lootTable.add(itemStack.clone());
+    public String getDisplayName() {
+        return displayName;
     }
 
-    public void clearLootTable() {
-        lootTable.clear();
+    @SuppressWarnings("deprecation")
+    public String getColoredDisplayName() {
+        return ChatColor.translateAlternateColorCodes('&', displayName);
     }
 
-    public void addPotionEffect(PotionEffect potionEffect) {
-        Objects.requireNonNull(potionEffect, "Potion effect cannot be null");
-        potionEffects.add(potionEffect);
-    }
-
-    public boolean removePotionEffect(PotionEffectType type) {
-        Objects.requireNonNull(type, "Potion effect type cannot be null");
-
-        return potionEffects.removeIf(
-                potionEffect -> potionEffect.getType().equals(type)
+    public void setDisplayName(String displayName) {
+        this.displayName = Objects.requireNonNull(
+                displayName,
+                "Display name cannot be null"
         );
     }
 
-    public void clearPotionEffects() {
-        potionEffects.clear();
+    public String getName() {
+        return getDisplayName();
     }
 
-    public boolean removeLoot(int index) {
-        if (index < 0 || index >= lootTable.size()) {
-            return false;
-        }
-
-        lootTable.remove(index);
-        return true;
-    }
-
-    private static String validateId(String id) {
-        Objects.requireNonNull(id, "Boss ID cannot be null");
-
-        String normalized = id.trim().toLowerCase();
-
-        if (!normalized.matches("[a-z0-9_:-]+")) {
-            throw new IllegalArgumentException(
-                    "Boss ID may only contain lowercase letters, numbers, "
-                            + "'_', '-' and ':'"
-            );
-        }
-
-        return normalized;
-    }
-
-    private static EntityType validateEntityType(EntityType entityType) {
-        Objects.requireNonNull(entityType, "Entity type cannot be null");
-
-        if (!entityType.isAlive()) {
-            throw new IllegalArgumentException(
-                    entityType + " is not a living entity type"
-            );
-        }
-
-        return entityType;
+    public void setName(String name) {
+        setDisplayName(name);
     }
 
     public String getId() {
         return id;
     }
 
-    public String getName() {
-        return name;
+    public NamespacedKey getKey() {
+        return key;
     }
 
-    public void setName(String name) {
-        this.name = Objects.requireNonNull(name, "Boss name cannot be null");
+    public String getRegistryId() {
+        return key.getNamespace() + ":" + key.getKey();
     }
 
     public double getHealth() {
@@ -251,6 +184,31 @@ public class CustomBoss {
         this.actionBar = actionBar;
     }
 
+    public void addLoot(ItemStack itemStack) {
+        Objects.requireNonNull(itemStack, "ItemStack cannot be null");
+
+        if (itemStack.getType().isAir()) {
+            throw new IllegalArgumentException(
+                    "Cannot add air to the loot table"
+            );
+        }
+
+        lootTable.add(itemStack.clone());
+    }
+
+    public boolean removeLoot(int index) {
+        if (index < 0 || index >= lootTable.size()) {
+            return false;
+        }
+
+        lootTable.remove(index);
+        return true;
+    }
+
+    public void clearLootTable() {
+        lootTable.clear();
+    }
+
     public List<ItemStack> getLootTable() {
         return lootTable.stream()
                 .map(ItemStack::clone)
@@ -271,6 +229,23 @@ public class CustomBoss {
 
             this.lootTable.add(item.clone());
         }
+    }
+
+    public void addPotionEffect(PotionEffect potionEffect) {
+        Objects.requireNonNull(potionEffect, "Potion effect cannot be null");
+        potionEffects.add(potionEffect);
+    }
+
+    public boolean removePotionEffect(PotionEffectType type) {
+        Objects.requireNonNull(type, "Potion effect type cannot be null");
+
+        return potionEffects.removeIf(
+                potionEffect -> potionEffect.getType().equals(type)
+        );
+    }
+
+    public void clearPotionEffects() {
+        potionEffects.clear();
     }
 
     public List<PotionEffect> getPotionEffects() {
@@ -437,27 +412,22 @@ public class CustomBoss {
         this.droppedExperience = droppedExperience;
     }
 
-    public void copySettingsFrom(BaseBoss baseBoss) {
-        Objects.requireNonNull(baseBoss, "BaseBoss cannot be null");
+    public void applyToEntity(LivingEntity entity) {
+        Objects.requireNonNull(entity, "Entity cannot be null");
 
-        setCustomNameVisible(baseBoss.isCustomNameVisible());
-        setPersistent(baseBoss.isPersistent());
-        setRemoveWhenFarAway(baseBoss.isRemoveWhenFarAway());
-        setGlowing(baseBoss.isGlowing());
-        setInvulnerable(baseBoss.isInvulnerable());
-        setSilent(baseBoss.isSilent());
-        setAi(baseBoss.hasAi());
-        setCanPickupItems(baseBoss.canPickupItems());
-        setHelmet(baseBoss.getHelmet());
-        setChestplate(baseBoss.getChestplate());
-        setLeggings(baseBoss.getLeggings());
-        setBoots(baseBoss.getBoots());
-        setMainHand(baseBoss.getMainHand());
-        setOffHand(baseBoss.getOffHand());
-        setDroppedExperience(baseBoss.getDroppedExperience());
-    }
+        if (!displayName.isBlank()) {
+            entity.setCustomName(getColoredDisplayName());
+        }
 
-    private void applyEquipment(LivingEntity entity) {
+        entity.setCustomNameVisible(customNameVisible);
+        entity.setPersistent(persistent);
+        entity.setRemoveWhenFarAway(removeWhenFarAway);
+        entity.setGlowing(glowing);
+        entity.setInvulnerable(invulnerable);
+        entity.setSilent(silent);
+        entity.setAI(ai);
+        entity.setCanPickupItems(canPickupItems);
+
         EntityEquipment equipment = entity.getEquipment();
 
         if (equipment == null) {
@@ -487,6 +457,42 @@ public class CustomBoss {
         if (offHand != null) {
             equipment.setItemInOffHand(offHand.clone());
         }
+    }
+
+    public void onSpawn(LivingEntity entity) {
+    }
+
+    public void onTick(LivingEntity entity) {
+    }
+
+    public void onDeath(EntityDeathEvent event) {
+    }
+
+    private static String validateId(String id) {
+        Objects.requireNonNull(id, "Boss ID cannot be null");
+
+        String normalized = id.trim().toLowerCase(Locale.ROOT);
+
+        if (!normalized.matches("[a-z0-9_-]+")) {
+            throw new IllegalArgumentException(
+                    "Boss ID may only contain lowercase letters, "
+                            + "numbers, '_' and '-'"
+            );
+        }
+
+        return normalized;
+    }
+
+    private static EntityType validateEntityType(EntityType entityType) {
+        Objects.requireNonNull(entityType, "Entity type cannot be null");
+
+        if (!entityType.isAlive()) {
+            throw new IllegalArgumentException(
+                    entityType + " is not a living entity type"
+            );
+        }
+
+        return entityType;
     }
 
     private static ItemStack cloneItem(ItemStack itemStack) {

@@ -1,6 +1,8 @@
 package ch.framedev.customBossPluginMaven;
 
+import org.bukkit.Location;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class CustomBossPlugin extends JavaPlugin {
@@ -43,5 +45,21 @@ public final class CustomBossPlugin extends JavaPlugin {
 
     public BossManager getBossManager() {
         return bossManager;
+    }
+
+    public CustomBoss registerBoss(BaseBoss baseBoss) {
+        return bossManager.registerBoss(baseBoss);
+    }
+
+    public LivingEntity spawnBoss(BaseBoss baseBoss, Location location) {
+        return bossManager.spawnBoss(baseBoss, location);
+    }
+
+    public boolean unregisterBoss(BaseBoss baseBoss) {
+        return bossManager.unregisterBoss(baseBoss);
+    }
+
+    public boolean unregisterBoss(String id) {
+        return bossManager.unregisterBoss(id);
     }
 }
