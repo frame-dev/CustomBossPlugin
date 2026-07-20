@@ -1,0 +1,28 @@
+bosses:
+  zombie_boss:
+    name: §6Zombie
+    health: 55.0
+    entity-type: ZOMBIE
+    boss-bar: true
+    action-bar: false
+    loot-table:
+      - ==: org.bukkit.inventory.ItemStack
+        DataVersion: 4790
+        id: minecraft:acacia_boat
+        count: 1
+        schema_version: 1
+    potion-effects:
+      - ==: PotionEffect
+        effect: minecraft:absorption
+        duration: 2400
+        amplifier: 1
+        ambient: false
+        has-particles: false
+        has-icon: false
+      - ==: PotionEffect
+        effect: minecraft:glowing
+        duration: 2400
+        amplifier: 0
+        ambient: false
+        has-particles: false
+        has-icon: false
