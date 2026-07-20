@@ -49,9 +49,9 @@ The main command is `/boss`. Aliases are `/customboss` and `/bosses`.
 | `/boss edit <id> name <name>` | Change a boss display name. |
 | `/boss edit <id> health <amount>` | Change a boss health value. |
 | `/boss edit <id> type <entity>` | Change a boss entity type. |
-| `/boss edit <id> bossbar <true|false>` | Enable or disable boss bar display. |
-| `/boss edit <id> actionbar <true|false>` | Enable or disable action bar display. |
-| `/boss edit <id> potion add <type> <seconds|-1> <level> [ambient] [particles] [icon]` | Add a potion effect. Use `-1` for infinite duration. |
+| `/boss edit <id> bossbar <true/false>` | Enable or disable boss bar display. |
+| `/boss edit <id> actionbar <true/false>` | Enable or disable action bar display. |
+| `/boss edit <id> potion add <type> <seconds or -1> <level> [ambient] [particles] [icon]` | Add a potion effect. Use `-1` for infinite duration. |
 | `/boss edit <id> potion remove <type>` | Remove a potion effect. |
 | `/boss edit <id> potion clear` | Remove all potion effects. |
 | `/boss edit <id> potion list` | List potion effects. |
@@ -60,8 +60,8 @@ The main command is `/boss`. Aliases are `/customboss` and `/bosses`.
 | `/boss edit <id> loot remove <index>` | Remove loot by list index. |
 | `/boss edit <id> loot clear` | Clear the loot table. |
 | `/boss edit <id> loot list` | List configured loot. |
-| `/boss enable <id> <bossbar|actionbar>` | Enable a display feature. |
-| `/boss disable <id> <bossbar|actionbar>` | Disable a display feature. |
+| `/boss enable <id> <bossbar/actionbar>` | Enable a display feature. |
+| `/boss disable <id> <bossbar/actionbar>` | Disable a display feature. |
 | `/boss spawn <id>` | Spawn a boss at your location. |
 | `/boss spawnat <id> <world> <x> <y> <z>` | Spawn a boss at specific coordinates. Supports `~` relative coordinates. |
 | `/boss delete <id>` | Delete a boss definition. |
