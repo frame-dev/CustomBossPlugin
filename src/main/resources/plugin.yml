@@ -1,0 +1,19 @@
+name: CustomBossPlugin
+version: '${project.version}'
+main: ch.framedev.customBossPluginMaven.CustomBossPlugin
+api-version: '1.20'
+author: FrameDev
+
+commands:
+  boss:
+    description: Creates, manages and spawns custom bosses
+    usage: /boss
+    aliases:
+      - customboss
+      - bosses
+    permission: customboss.admin
+
+permissions:
+  customboss.admin:
+    description: Allows access to all custom boss commands
+    default: op
